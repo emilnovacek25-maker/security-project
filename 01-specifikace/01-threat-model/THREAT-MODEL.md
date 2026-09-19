@@ -1,7 +1,7 @@
 # THREAT-MODEL.md
 
-Version: 0.4.0  
-Status: DRAFT / THREAT MODEL v0  
+Version: 0.4.1  
+Status: REVIEWED v0 / READY FOR INVENTORY  
 Scope: GitHub Policy Broker security project
 
 ## 1. Účel
