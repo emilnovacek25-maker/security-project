@@ -1,0 +1,30 @@
+version: "0.1.0"
+status: inventory_template
+
+principals: []
+
+required_fields:
+  - principal_id
+  - logical_actor
+  - principal_type
+  - authentication_mechanism
+  - credential_ids
+  - target_scope
+  - declared_capabilities
+  - effective_permissions
+  - write_path_ids
+  - status
+  - evidence
+
+status_values:
+  - active
+  - approved_exception
+  - planned_for_removal
+  - removed
+  - unknown
+
+rules:
+  - "credential secret values must never be stored"
+  - "effective permissions must be derived from authoritative state"
+  - "declared capability mismatch is a security violation"
+  - "every write-capable principal must map to at least one WRITE_PATH_ID"
