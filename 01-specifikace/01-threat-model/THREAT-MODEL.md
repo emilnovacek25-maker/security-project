@@ -1,6 +1,6 @@
 # THREAT-MODEL.md
 
-Version: 0.2.0  
+Version: 0.3.0  
 Status: DRAFT / THREAT MODEL v0  
 Scope: GitHub Policy Broker security project
 
@@ -60,6 +60,20 @@ V této fázi nejsou detailně modelovány:
 
 Out-of-scope neznamená ignorováno. Pokud inventura nebo deployment design ukáže, že je některý bod bezpečnostně relevantní, musí být převeden do scope v1.
 
+### 2.3 Explicitní non-goals
+
+Tento threat model nemá za cíl:
+
+- chránit proti fyzickému útoku na GitHub datacentra,
+- modelovat interní zero-day zranitelnosti samotné GitHub platformy,
+- garantovat bezpečnost proti útočníkovi s neomezenými prostředky,
+- řešit kompromitaci samotného modelu/provozovatele ChatGPT mimo rozhraní a capabilities, které tento systém skutečně používá,
+- nahrazovat obecný endpoint-security program pro všechna lidská zařízení,
+- nahrazovat bezpečnostní model TLS/DNS/GitHub jako externích trusted dependencies,
+- dokazovat právní/regulatorní compliance, dokud nejsou známa skutečná auditní data a provozní kontext.
+
+Pokud některý non-goal začne přímo ovlivňovat bezpečnostní invariant systému, musí být v další verzi přeřazen do scope.
+
 ---
 
 ## 3. Security objectives a invariants
@@ -82,11 +96,16 @@ Co není explicitně povoleno
 
 ### I003 — Technical meaning of BLOCK
 
+Pro principal a write path podléhající policy brokeru:
+
 ```text
 POLICY BLOCK
 =
-TECHNICKY NEMOŽNÁ OPERACE
+operace technicky neproveditelná
+touto ani jinou neautorizovanou cestou
 ```
+
+Tento invariant se nevztahuje na explicitně evidované `APPROVED_EXCEPTION` / root-governance cesty; ty musí mít vlastní controls, audit a governance.
 
 ### I004 — ChatGPT has no write credential
 
@@ -435,6 +454,8 @@ Minimální komponenty, jejichž kompromitace může porušit hlavní bezpečnos
 
 Cíl implementace je TCB minimalizovat. Komponenta nemá být v TCB jen proto, že je součást systému.
 
+**Terminologie:** tato sekce popisuje `local TCB` systému, který sami provozujeme. GitHub platforma není součástí local TCB; je vedena jako **external trusted computing dependency**. Její kompromitace může bezpečnostní invariant porušit, ale není lokálně kontrolovatelná stejným mechanismem jako broker, host, policy evaluator nebo signing service.
+
 ---
 
 ## 10. Data flows a trust boundaries
@@ -514,7 +535,7 @@ Každá hrozba obsahuje:
 **Preconditions:** ChatGPT zpracuje nedůvěryhodný obsah.  
 **Attack path:** malicious content → LLM instruction override attempt → harmful proposed action.  
 **Impact:** pokus o neautorizovaný write nebo security-sensitive change.  
-**Candidate controls:** C001 no ChatGPT write credential; C002 broker authoritative-state lookup; C003 untrusted-content hierarchy.  
+**Candidate controls:** C001 no ChatGPT write credential; C002 broker authoritative-state lookup; C018 untrusted-content/instruction hierarchy.  
 **Enforcement:** credential isolation + broker policy.  
 **Detection:** denied anomalous requests, prompt-injection test cases.  
 **Test/evidence:** pokus přimět ChatGPT k direct write musí technicky selhat.  
@@ -804,6 +825,47 @@ Každá hrozba obsahuje:
 **Candidate controls:** forensic readiness in incident response, retention policy, configuration snapshots, deployment and credential history.  
 **Residual risk:** external systems may have different retention.  
 **Risk status:** MEDIUM/HIGH.
+
+### T026 — Canonicalization / interpretation mismatch
+**Assets:** A001, A002, A006.  
+**Threat actor:** TA002, TA009 nebo neúmyslná klientská nejednoznačnost.  
+**Preconditions:** stejný request lze reprezentovat více způsoby nebo parser/policy/executor interpretují data odlišně.  
+**Attack path:** representation A → policy canonicalizuje jako stav X → executor interpretuje jinak → vznikne stav Y.  
+**Příklady:** path normalization, Unicode/case rozdíly, ref normalization, encoded characters, duplicate/ambiguous fields, repository identity representation, schema/executor disagreement.  
+**Impact:** policy autorizuje jinou operaci, než executor skutečně provede.  
+**Candidate controls:** C019 single canonical representation; strict schemas; `additionalProperties=false`; normalization před policy evaluation; execution pouze z canonical object.  
+**Enforcement:** request canonicalizer + schema validator + executor contract.  
+**Detection:** canonical-digest mismatch, parser/schema rejection, security violation.  
+**Test/evidence:** ekvivalentní reprezentace musí mít shodný canonical digest; nejednoznačná reprezentace → BLOCK.  
+**Residual risk:** chyba ve společném canonicalizeru může ovlivnit policy i executor.  
+**Risk status:** CRITICAL.
+
+### T027 — Duplicate / replayed Action Request
+**Assets:** A001, A006, A009.  
+**Threat actor:** TA009, síťové chyby nebo neúmyslné klientské retry.  
+**Preconditions:** klient po timeoutu neví, zda operace proběhla, nebo znovu odešle stejný request.  
+**Attack path:** ALLOW request → GitHub execution → timeout/response loss → retry → druhá execution.  
+**Impact:** duplicitní branch/PR/commit/merge nebo jiný nekontrolovaný opakovaný side effect.  
+**Candidate controls:** C020 request idempotency; unique `request_id`; canonical request digest; execution-state registry; atomic duplicate detection.  
+**Enforcement:** broker execution layer.  
+**Detection:** duplicate request event + audit correlation.  
+**Test/evidence:** stejný `request_id` a canonical request nesmí vytvořit druhý side effect.  
+**Residual risk:** externí API může mít vlastní neatomické semantics; broker musí post-checkem zjistit skutečný stav.  
+**Risk status:** HIGH.
+
+### T028 — Secret disclosure into untrusted context
+**Assets:** A003, A004, A005, A007.  
+**Threat actor:** TA002, TA004, TA005, TA006 nebo neúmyslný debug/diagnostic flow.  
+**Preconditions:** secret se dostane do exception traceback, debug logu, audit payloadu, ChatGPT contextu, PR/Issue, CI outputu nebo diagnostického bundle.  
+**Attack path:** secret-bearing runtime data → untrusted/logging context → další actor secret přečte → credential abuse.  
+**Impact:** kompromitace installation tokenu, confirmation/session secretu, externího credentialu nebo signing materialu.  
+**Candidate controls:** C021 secret-context isolation and redaction.  
+**Enforcement:** logging/audit serializers, exception handling, secret store API, prompt/context construction, CI masking.  
+**Detection:** secret-scanning/redaction tests, diagnostic bundle review.  
+**Test/evidence:** známý canary secret se nesmí objevit v plaintextu v LLM contextu, auditu, logu ani CI outputu.  
+**Residual risk:** secret může uniknout z memory dumpu nebo kompromitovaného hostu mimo běžný logging path.  
+**Risk status:** CRITICAL.
+
 
 ---
 
@@ -1113,6 +1175,10 @@ Definitivní controls budou v `CONTROLS.yaml`. v0 zavádí minimální candidate
 - **C015** Emergency App suspend
 - **C016** Bootstrap review and lockdown
 - **C017** Human admin path governance
+- **C018** Untrusted-content / instruction hierarchy
+- **C019** Single canonical representation / strict parsing
+- **C020** Action-request idempotency and duplicate detection
+- **C021** Secret-context isolation and redaction
 
 Každý candidate control musí být ve specifikační fázi převeden na formální control s:
 - mitigates,
@@ -1141,6 +1207,9 @@ V010 Unauthorized privileged Actions capability
 V011 Repository identity mismatch
 V012 Replay attempt
 V013 Bootstrap integrity failure
+V014 Canonicalization / interpretation mismatch
+V015 Duplicate action request
+V016 Secret disclosure to untrusted context
 ```
 
 Detailní detection/response/owner budou v `SECURITY-VIOLATIONS.yaml`.
@@ -1165,6 +1234,9 @@ Musí být rozhodnuto nebo inventurou potvrzeno:
 12. Jaké retention/privacy požadavky jsou relevantní?
 13. Jak bude provedeno bootstrap lockdown?
 14. Jaký bude interval drift validation?
+15. Jak bude definována canonical representation a parser contract?
+16. Jaká budou idempotency semantics Action Requestu?
+17. Jak bude enforceováno, že secrets nevstoupí do LLM/log/audit plaintext contextu?
 
 ---
 
@@ -1184,7 +1256,10 @@ v1 nesmí vzniknout bez:
 - confirmation authentication decision,
 - audit ownership/design decision,
 - availability/emergency-access decision,
-- bootstrap state.
+- bootstrap state,
+- canonicalization/parser contract,
+- Action Request idempotency model,
+- secret redaction/context-isolation model.
 
 ---
 
@@ -1210,6 +1285,9 @@ v0 je připraven pro další krok pouze pokud:
 - availability/emergency threats jsou zahrnuty,
 - bootstrap/root-of-trust threats jsou zahrnuty,
 - security drift je zahrnut,
+- canonicalization/parser-confusion threat je zahrnuta,
+- Action Request replay/idempotency threat je zahrnuta,
+- secret disclosure do nedůvěryhodného contextu je zahrnuta,
 - open decisions jsou explicitní,
 - je jasně označeno, co musí potvrdit inventura.
 
@@ -1228,3 +1306,144 @@ actual principals/effective permissions
 ```
 
 Teprve poté vznikne `THREAT MODEL v1`.
+
+---
+
+## 27. Risk evaluation model v0
+
+Risk labels ve v0 jsou **prozatímní** a nesmí být interpretovány jako empirická pravděpodobnost před inventurou.
+
+Každá hrozba má být ve v1 vyhodnocena alespoň podle:
+
+```text
+Integrity:       LOW / MEDIUM / HIGH
+Confidentiality: LOW / MEDIUM / HIGH
+Availability:    LOW / MEDIUM / HIGH
+Scope:           single repo / multiple repos / whole system / external system
+Reversibility:   reversible / partially reversible / irreversible
+Detection time:  immediate / minutes-hours / days / unknown
+Likelihood:      likely / possible / unlikely / unknown
+```
+
+U každé hodnoty `likelihood` musí být ve v1 uvedeno `likelihood_rationale`. Hodnota `UNKNOWN` je ve v0 preferována všude, kde ji nelze opřít o inventuru nebo ověřenou provozní skutečnost.
+
+Threat ownership pro v0 používá logické role:
+
+- `security_owner` — přijímá/odmítá residual risk a schvaluje bezpečnostní výjimky,
+- `architect` — odpovídá za konzistenci modelu,
+- `developer` — odpovídá za implementační controls po Definition of Ready,
+- `ux_tester` — připravuje nezávislé testy controls/threat scenarios.
+
+Konkrétní fyzické identity budou přiřazeny v `RESPONSIBILITIES.md`.
+
+---
+
+## 28. Assumption validation
+
+| Assumption | Validace | Failure mode |
+|---|---|---|
+| AS001 GitHub platform | sledovat relevantní GitHub security advisories a zásadní změny API/permission modelu | zpochybnění platform trust → freeze privileged writes a security review |
+| AS002 TLS/transport | používat standardní ověřený TLS stack; žádné vypínání cert validation | transport identity/integrity uncertain → BLOCK |
+| AS003 Host OS | patching, host hardening, access review | host compromise → emergency stop + incident response |
+| AS004 Secret/signing service | access review, audit issuance, integrity monitoring | signing trust uncertain → BLOCK WRITE + rotate/revoke |
+| AS005 Security owner | silná autentizace a explicitní role assignment | owner identity uncertain → no privileged approval |
+| AS006 Time source | monitorovat rozumnou časovou synchronizaci | expiry/audit ordering uncertain → confirmation/write BLOCK podle dopadu |
+| AS007 Audit anchor | oddělený credential a periodická integrity verification | anchor integrity uncertain → audit violation + BLOCK WRITE |
+| AS008 Repository identity | GitHub `repository_id` + owner/name consistency check | mismatch → BLOCK |
+
+---
+
+## 29. Attack scenarios v0
+
+### S001 — Prompt injection → pokus o direct write bypass
+1. Nedůvěryhodný repository/web obsah instruuje ChatGPT, aby ignoroval policy.
+2. ChatGPT navrhne škodlivý write.
+3. ChatGPT nemá write credential.
+4. Broker request canonicalizuje a sám načte GitHub state.
+5. Policy vrátí BLOCK.
+6. Alternativní non-broker write path nesmí být pro AI dostupná.
+
+**Expected:** žádný GitHub write; audit obsahuje zamítnutý request.  
+**Pokryté hrozby:** T001, T002, T026, T028.  
+**Invariants:** I001, I003, I004, I005, I006, I008.
+
+### S002 — Schválení PR → změna base → pokus o merge
+1. Broker vytvoří confirmation request pro konkrétní base/head/diff/policy state.
+2. Human potvrdí.
+3. Base SHA se změní.
+4. Broker před execution načte aktuální state.
+5. Confirmation již neodpovídá current state.
+
+**Expected:** confirmation invalid; nový policy evaluation a případně nové confirmation.  
+**Pokryté hrozby:** T009.  
+**Invariants:** I006, I007.
+
+### S003 — Workflow získá neočekávané write/OIDC privilege
+1. Workflow/job je deklarován jako read-only.
+2. Repo konfigurace nebo workflow změna mu přidá `contents: write` nebo `id-token: write`.
+3. Bottom-up validation porovná effective permission s capability modelem.
+
+**Expected:** SECURITY VIOLATION; affected write path se nesmí tiše považovat za compliant.  
+**Pokryté hrozby:** T011, T013, T021.  
+**Invariants:** I009.
+
+### S004 — Timeout po úspěšném GitHub write
+1. Broker provede povolený write.
+2. GitHub operaci přijme.
+3. Response se ztratí / klient dostane timeout.
+4. Klient odešle stejný request znovu.
+
+**Expected:** broker rozpozná `request_id`/canonical digest a nevytvoří druhý side effect; post-check zjistí skutečný stav.  
+**Pokryté hrozby:** T027.
+
+### S005 — Broker host kompromitován
+1. Útočník získá broker host.
+2. Pokusí se získat App private key/token a manipulovat audit.
+3. Private key nemá být lokálně exportovatelný, pokud bude použit sign-only model.
+4. Security owner přes GitHub UI suspenduje App installation.
+5. Audit history zůstává mimo možnost zpětného přepsání brokerem.
+
+**Expected:** nové broker writes selžou; incident response zachová evidence.  
+**Pokryté hrozby:** T005, T017, T018, T025, T028.  
+**Invariants:** I010, I011.
+
+---
+
+## 30. Coverage matrix v0
+
+Tato matice je předběžná; finální strojová vazba je v companion souboru `THREAT-MODEL.yaml`.
+
+| Threat | Invariants | Candidate controls | Test/evidence status |
+|---|---|---|---|
+| T001 | I001,I004,I005,I006,I008 | C001,C002,C018 | specified, not implemented |
+| T002 | I001,I002,I003,I013 | C008,C009,C017 | inventory required |
+| T005 | I001,I010 | C006,C007,C015,C021 | design required |
+| T007 | I005,I007 | C004,C005 | protocol required |
+| T009 | I006,I007 | C004 | protocol required |
+| T011 | I009 | C009,C012 | inventory required |
+| T017 | I010,I011 | C007,C011,C014,C015 | deployment design required |
+| T021 | I009 | C008,C009 | observability required |
+| T023 | I003,I013 | C017 | governance required |
+| T024 | I001,I013 | C016 | bootstrap procedure required |
+| T026 | I006,I008 | C019 | schema/parser design required |
+| T027 | — | C020 | execution protocol required |
+| T028 | I004,I010 | C007,C021 | redaction/context tests required |
+
+Nepokryté nebo částečně pokryté položky nejsou ve v0 chyba; musí být explicitně převedeny do `CONTROLS.yaml` a `TEST-PLAN.md`.
+
+---
+
+## 31. Threat-model ownership a review
+
+**Document owner (logical role):** `security_owner`  
+**Model maintainer:** `architect`  
+**Independent reviewer:** `ux_tester` / security reviewer podle aktuálního projektu  
+**Review cadence:** povinně:
+- před přechodem z v0 do inventury,
+- po dokončení inventury při tvorbě v1,
+- po security-sensitive změně architektury,
+- po závažném incidentu,
+- při detekci security drift, která mění assumptions/threats/controls.
+
+Konkrétní fyzické přiřazení rolí bude v `RESPONSIBILITIES.md`.
+
