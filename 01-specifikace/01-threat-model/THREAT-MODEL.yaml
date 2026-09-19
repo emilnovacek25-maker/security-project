@@ -1,0 +1,193 @@
+version: "0.3.0"
+status: draft-v0
+document: THREAT-MODEL.md
+
+ownership:
+  owner_role: security_owner
+  maintainer_role: architect
+  independent_reviewer_role: ux_tester
+
+invariants:
+  I001: single_brokered_ai_write_path
+  I002: default_deny
+  I003: broker_domain_block_is_technically_enforced
+  I004: chatgpt_has_no_write_credential
+  I005: chatgpt_is_not_identity_provider
+  I006: broker_fetches_authoritative_state
+  I007: confirmation_is_state_bound
+  I008: unknown_means_deny
+  I009: declared_capability_matches_effective_permission
+  I010: audit_history_survives_broker_compromise
+  I011: no_direct_fallback
+  I012: security_sensitive_changes_are_separate_classes
+  I013: human_privileged_paths_are_explicit
+
+controls:
+  C001: no_chatgpt_write_credential
+  C002: broker_authoritative_state_lookup
+  C003: default_deny_unknown_deny
+  C004: state_bound_human_confirmation
+  C005: replay_safe_confirmation
+  C006: github_app_least_privilege
+  C007: private_key_isolation_signing_service
+  C008: write_path_inventory_and_classification
+  C009: effective_permission_drift_detection
+  C010: security_sensitive_operation_classes
+  C011: append_only_externally_anchored_audit
+  C012: actions_privilege_default_deny
+  C013: supply_chain_integrity_controls
+  C014: deployment_hardening
+  C015: emergency_app_suspend
+  C016: bootstrap_review_and_lockdown
+  C017: human_admin_path_governance
+  C018: untrusted_content_instruction_hierarchy
+  C019: single_canonical_representation_strict_parsing
+  C020: action_request_idempotency_duplicate_detection
+  C021: secret_context_isolation_and_redaction
+
+threats:
+  T001:
+    name: prompt_injection_compromised_llm_behavior
+    owner: security_owner
+    reviewer: architect
+    severity: high
+    likelihood: unknown
+    likelihood_rationale: pending_inventory
+    invariants: [I001, I004, I005, I006, I008]
+    controls: [C001, C002, C018]
+    tests: [chatgpt_direct_write_must_fail, untrusted_content_cannot_authorize]
+
+  T002:
+    name: direct_write_bypass_outside_broker
+    owner: security_owner
+    reviewer: architect
+    severity: critical
+    likelihood: unknown
+    likelihood_rationale: write_path_inventory_not_complete
+    invariants: [I001, I002, I003, I013]
+    controls: [C008, C009, C017]
+    tests: [legacy_nonapproved_write_path_must_fail]
+
+  T005:
+    name: github_app_private_key_compromise
+    owner: security_owner
+    reviewer: architect
+    severity: critical
+    likelihood: unknown
+    likelihood_rationale: credential_model_not_complete
+    invariants: [I001, I010]
+    controls: [C006, C007, C015, C021]
+    tests: [private_key_absent_from_repo_logs_llm_actions]
+
+  T007:
+    name: confirmation_forgery
+    owner: security_owner
+    reviewer: ux_tester
+    severity: critical
+    likelihood: possible
+    likelihood_rationale: untrusted_clients_can_submit_requests
+    invariants: [I005, I007]
+    controls: [C004, C005]
+    tests: [llm_confirmation_flag_alone_must_fail]
+
+  T009:
+    name: toctou_state_change_after_confirmation
+    owner: security_owner
+    reviewer: ux_tester
+    severity: critical
+    likelihood: possible
+    likelihood_rationale: concurrent_repo_changes_are_normal
+    invariants: [I006, I007]
+    controls: [C004]
+    tests: [state_change_invalidates_confirmation]
+
+  T011:
+    name: privileged_github_actions_workflow
+    owner: security_owner
+    reviewer: architect
+    severity: critical
+    likelihood: unknown
+    likelihood_rationale: actions_inventory_not_complete
+    invariants: [I009]
+    controls: [C009, C012]
+    tests: [effective_actions_permission_mismatch_is_violation]
+
+  T017:
+    name: broker_host_compromise
+    owner: security_owner
+    reviewer: architect
+    severity: critical
+    likelihood: unknown
+    likelihood_rationale: deployment_not_decided
+    invariants: [I010, I011]
+    controls: [C007, C011, C014, C015]
+    tests: [suspend_app_blocks_broker_write, broker_cannot_rewrite_audit_history]
+
+  T021:
+    name: security_drift
+    owner: security_owner
+    reviewer: architect
+    severity: high
+    likelihood: likely_over_time
+    likelihood_rationale: permissions_integrations_and_workflows_change_over_time
+    invariants: [I009]
+    controls: [C008, C009]
+    tests: [induced_drift_is_detected]
+
+  T023:
+    name: human_admin_owner_bypass
+    owner: security_owner
+    reviewer: architect
+    severity: critical
+    likelihood: known_possible
+    likelihood_rationale: ultimate_owner_path_exists_by_design_until_inventory_classifies_it
+    invariants: [I003, I013]
+    controls: [C017]
+    tests: [human_admin_paths_are_classified]
+
+  T024:
+    name: bootstrap_root_of_trust_compromise
+    owner: security_owner
+    reviewer: architect
+    severity: critical
+    likelihood: possible
+    likelihood_rationale: bootstrap_occurs_before_broker_controls_exist
+    invariants: [I001, I013]
+    controls: [C016]
+    tests: [post_bootstrap_validation_and_lockdown]
+
+  T026:
+    name: canonicalization_interpretation_mismatch
+    owner: security_owner
+    reviewer: architect
+    severity: critical
+    likelihood: possible
+    likelihood_rationale: multiple_input_representations_exist
+    invariants: [I006, I008]
+    controls: [C019]
+    tests: [equivalent_requests_same_digest, ambiguous_request_blocked]
+
+  T027:
+    name: duplicate_replayed_action_request
+    owner: security_owner
+    reviewer: architect
+    severity: high
+    likelihood: possible
+    likelihood_rationale: network_retries_and_timeouts_are_expected
+    invariants: []
+    controls: [C020]
+    tests: [same_request_id_does_not_duplicate_side_effect]
+
+  T028:
+    name: secret_disclosure_into_untrusted_context
+    owner: security_owner
+    reviewer: architect
+    severity: critical
+    likelihood: possible
+    likelihood_rationale: logs_exceptions_ci_and_llm_context_are_multiple_exposure_paths
+    invariants: [I004, I010]
+    controls: [C007, C021]
+    tests: [canary_secret_not_present_in_logs_audit_llm_ci]
+
+coverage_status:
+  note: "Companion v0 coverage. Full threat/control/test mapping will move to CONTROLS.yaml and TEST-PLAN.md."
