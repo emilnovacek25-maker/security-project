@@ -2,13 +2,36 @@
 
 Stav: **SPECIFIKAČNÍ FÁZE / IMPLEMENTACE BROKERU ZATÍM NEZAHAJOVAT**
 
-Tento repozitář je autoritativní pracovní prostor pro formální bezpečnostní specifikaci GitHub Policy Brokeru.
+Tento repozitář je veden jako projekt podle vývojových fází. Kořen obsahuje pouze projektový přehled; pracovní artefakty patří do složek podle fáze projektu.
+
+## Struktura projektu
+
+```text
+security-project/
+├── README.md
+├── 00-zadani-a-oponentura/
+├── 01-specifikace/
+│   ├── 01-threat-model/
+│   ├── 02-inventura/
+│   ├── 03-actor-capability-model/
+│   ├── 04-controls-a-violations/
+│   ├── 05-credentials/
+│   ├── 06-protokoly-a-schemata/
+│   ├── 07-deployment-a-audit/
+│   ├── 08-incident-a-odpovednosti/
+│   └── 09-migration-test-observability/
+├── 02-implementace/
+├── 03-nezavisle-testovani/
+├── 04-nasazeni/
+├── 05-provoz-a-drift/
+└── 90-archiv/
+```
+
+Git neukládá prázdné složky, takže další adresáře budou vznikat postupně s prvními artefakty dané fáze.
 
 ## Nejvyšší bezpečnostní invariant
 
 > Žádná GitHub write operace, která podle bezpečnostního modelu podléhá brokeru, nesmí být technicky proveditelná jinou cestou než prostřednictvím brokeru.
-
-Současně platí:
 
 ```text
 Co není explicitně povoleno
@@ -37,26 +60,7 @@ short-lived GitHub App credential
 GitHub
 ```
 
-ChatGPT interpretuje požadavek, navrhuje operaci a připravuje obsah. Neautorizuje, není identity provider, nevydává credential a nemá přímý GitHub write credential.
-
-Broker ověřuje identitu, canonicalizuje request, načítá autoritativní GitHub state, vyhodnocuje policy, vyžaduje případný CONFIRM, ověřuje potvrzený state, získává krátkodobý credential, provádí operaci, post-check a audit.
-
-## Pořadí práce
-
-1. `THREAT-MODEL.md` v0
-2. `WRITE-PATHS.md` + credentials inventory
-3. `THREAT-MODEL.md` v1
-4. `ACTOR-PRINCIPALS.yaml` + `ACTOR-CAPABILITIES.yaml`
-5. `CONTROLS.yaml` + `SECURITY-VIOLATIONS.yaml`
-6. `CREDENTIAL-MODEL.md`
-7. Action / Policy / Confirmation / Execution / Audit schémata + `CONFIRMATION-PROTOCOL.md`
-8. Audit ownership + `DEPLOYMENT-SECURITY.md`
-9. `INCIDENT-RESPONSE.md` + `RESPONSIBILITIES.md`
-10. `MIGRATION.md` + `TEST-PLAN.md` + `OBSERVABILITY.md`
-11. Review celé specifikace + Definition of Ready
-12. Teprve poté implementace brokeru
-
-## Stav
+## Aktuální fáze
 
 ```text
 KONCEPČNÍ OPONENTURA
@@ -66,7 +70,7 @@ NORMATIVNÍ ZADÁNÍ
 → READY
 
 SPECIFIKAČNÍ FÁZE
-→ READY TO START
+→ PROBÍHÁ
 
 FORMÁLNÍ BEZPEČNOSTNÍ SPECIFIKACE
 → NOT COMPLETE
@@ -74,3 +78,9 @@ FORMÁLNÍ BEZPEČNOSTNÍ SPECIFIKACE
 IMPLEMENTACE BROKERU
 → ZATÍM NEZAHAJOVAT
 ```
+
+Aktuální první artefakt:
+`01-specifikace/01-threat-model/THREAT-MODEL.md`
+
+Další krok:
+`01-specifikace/02-inventura/WRITE-PATHS.md` + credentials inventory.
