@@ -83,4 +83,23 @@ Aktuální první artefakt:
 `01-specifikace/01-threat-model/THREAT-MODEL.md`
 
 Další krok:
-`01-specifikace/02-inventura/WRITE-PATHS.md` + credentials inventory.
+
+```text
+THREAT-MODEL v0 review
+↓
+REF001 Cloudflare-style reconnaissance
+↓
+autoritativní GitHub inventura
+↓
+inventory coverage ledger
+↓
+THREAT-MODEL v1
+```
+
+Pracovní artefakty:
+- `01-specifikace/02-inventura/CLOUDFLARE-RECONNAISSANCE.md`
+- `01-specifikace/02-inventura/AUTHORITATIVE-INVENTORY-CHECKLIST.md`
+- `01-specifikace/02-inventura/WRITE-PATHS.md`
+- `01-specifikace/02-inventura/CREDENTIALS.md`
+- `01-specifikace/02-inventura/ACTOR-PRINCIPALS.yaml`
+- `01-specifikace/02-inventura/INVENTORY-COVERAGE-LEDGER.yaml`
