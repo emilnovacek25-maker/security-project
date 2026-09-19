@@ -1,4 +1,4 @@
-version: "0.3.0"
+version: "0.4.0"
 status: draft-v0
 document: THREAT-MODEL.md
 
@@ -191,3 +191,46 @@ threats:
 
 coverage_status:
   note: "Companion v0 coverage. Full threat/control/test mapping will move to CONTROLS.yaml and TEST-PLAN.md."
+
+
+assumptions:
+  AS009:
+    name: sandbox_availability_for_external_audit
+    validation:
+      - no_external_network_unless_explicitly_allowed
+      - empty_allowlisted_environment
+      - read_only_target
+      - scratch_only_writes
+      - explicit_resource_limits
+    failure_mode: risky_validation_not_run_finding_remains_needs_validation
+
+external_references:
+  REF001:
+    name: cloudflare_security_audit_skill
+    type: external_reference
+    is_control: false
+    repository: cloudflare/security-audit-skill
+    per_use_record:
+      - source_commit_or_immutable_version
+      - date
+      - audit_profile
+      - scope
+      - sandbox_status
+      - limitations
+    not_authoritative_for:
+      - github_effective_state
+      - broker_runtime_decisions
+      - policy_evaluation
+      - credential_authority
+      - release_gate
+
+external_methodology_mapping:
+  prompt_injection: [T001]
+  excessive_agency: [T002, T023]
+  action_confirmation_binding: [T007, T008, T009, T027]
+  schema_dispatcher_disagreement: [T026]
+  retry_resume_idempotency: [T027]
+  sensitive_context_extraction: [T028, T005, T006]
+  privileged_ci: [T011, T012, T013]
+  supply_chain: [T014A, T014B, T014C, T014D]
+  audit_evidence_integrity: [T018A, T018B, T018C, T018D, T025]
