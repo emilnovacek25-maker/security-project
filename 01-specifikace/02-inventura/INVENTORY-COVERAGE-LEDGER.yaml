@@ -1,0 +1,29 @@
+version: "0.1.0"
+status: inventory_coverage_template
+
+coverage: []
+
+required_fields:
+  - area_id
+  - area
+  - source_recon_status
+  - live_inventory_status
+  - evidence
+  - threat_ids
+  - write_path_ids
+  - gaps
+  - reviewer_status
+
+status_values:
+  - covered
+  - partial
+  - needs_live_inventory
+  - needs_validation
+  - not_found
+  - out_of_scope_with_reason
+
+completion_rule: >
+  Inventory coverage is complete only when every scoped write-capability area
+  has authoritative live-state evidence or an explicit out-of-scope reason,
+  and all discovered write paths are classified as BROKERED,
+  APPROVED_EXCEPTION, or REMOVED.
