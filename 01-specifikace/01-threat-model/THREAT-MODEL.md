@@ -1,6 +1,6 @@
 # THREAT-MODEL.md
 
-Version: 0.3.0  
+Version: 0.4.0  
 Status: DRAFT / THREAT MODEL v0  
 Scope: GitHub Policy Broker security project
 
@@ -432,6 +432,20 @@ External anchor musí být spravován odděleným credentialem nebo trust domain
 
 ### AS008 — GitHub repository identity
 `repository_id` je bezpečnostní identita; owner/name slouží jako display/consistency metadata.
+
+### AS009 — Sandbox availability for external audit
+Pro plný externí security audit, který by potřeboval spouštět analyzovaný kód nebo validační kroky, se předpokládá OS-enforced sandbox s minimálně:
+- bez externí sítě, pokud není konkrétní krok výslovně povolen,
+- prázdným allowlisted environmentem,
+- read-only targetem,
+- scratch-only writes,
+- explicitními resource limits.
+
+Pokud vhodný sandbox není k dispozici:
+- rizikový validační krok se nespouští,
+- nález zůstane `needs_validation`,
+- nesmí být povýšen na `confirmed` pouze na základě nebezpečné improvizované validace,
+- důvod neprovedené validace se zaznamená.
 
 Pokud některý assumption selže, musí být vyhodnocen odpovídající incident nebo security violation.
 
@@ -1289,7 +1303,9 @@ v0 je připraven pro další krok pouze pokud:
 - Action Request replay/idempotency threat je zahrnuta,
 - secret disclosure do nedůvěryhodného contextu je zahrnuta,
 - open decisions jsou explicitní,
-- je jasně označeno, co musí potvrdit inventura.
+- je jasně označeno, co musí potvrdit inventura,
+- externí auditní metodiky jsou vedeny jako reference, nikoli controls,
+- sandbox assumption pro rizikovou externí validaci je explicitní.
 
 ---
 
@@ -1350,6 +1366,7 @@ Konkrétní fyzické identity budou přiřazeny v `RESPONSIBILITIES.md`.
 | AS006 Time source | monitorovat rozumnou časovou synchronizaci | expiry/audit ordering uncertain → confirmation/write BLOCK podle dopadu |
 | AS007 Audit anchor | oddělený credential a periodická integrity verification | anchor integrity uncertain → audit violation + BLOCK WRITE |
 | AS008 Repository identity | GitHub `repository_id` + owner/name consistency check | mismatch → BLOCK |
+| AS009 Audit sandbox | před full auditem ověřit isolation profile: no-network/allowlisted env/read-only target/scratch writes/resource limits | sandbox absent → risky validation se nespouští; finding = needs_validation |
 
 ---
 
@@ -1447,3 +1464,102 @@ Nepokryté nebo částečně pokryté položky nejsou ve v0 chyba; musí být ex
 
 Konkrétní fyzické přiřazení rolí bude v `RESPONSIBILITIES.md`.
 
+
+---
+
+## 32. External references
+
+### REF001 — Cloudflare security-audit-skill
+
+**Type:** external reference / audit methodology  
+**Repository:** `cloudflare/security-audit-skill`  
+**Role in this project:** metodická reference pro security reconnaissance, coverage-led hunting, independent validation a strukturovaný reporting.
+
+REF001 **není security control** a nesmí být použit jako:
+- autorita pro GitHub effective state,
+- broker runtime decision point,
+- policy evaluator,
+- credential authority,
+- release-gate authority.
+
+Při každém konkrétním použití REF001 se musí zaznamenat:
+- repository URL/name,
+- source commit nebo immutable version,
+- datum použití,
+- audit profile,
+- scope,
+- zda byl dostupný požadovaný sandbox,
+- případná omezení / `needs_validation` findings.
+
+Cloudflare-style reconnaissance je záměrně odděleno od naší autoritativní GitHub inventury:
+
+```text
+EXTERNAL RECONNAISSANCE
+→ source/local-state methodology
+→ coverage plan
+
+NEZNAMENÁ
+
+AUTHORITATIVE GITHUB INVENTORY
+→ repository_id / installation_id
+→ Apps / PATs / deploy keys / OAuth
+→ workflow/job effective permissions
+→ human/admin write paths
+```
+
+---
+
+## 33. External methodology mapping
+
+Tato tabulka je navigační mapping pro použití REF001. Neznamená, že externí metodika sama dané hrozby mitigovala.
+
+| External methodology class | Naše hrozby / oblasti |
+|---|---|
+| Prompt injection / untrusted instructions | T001, C018 |
+| Excessive agency / alternate write capability | T002, T023 |
+| Action-confirmation binding | T007, T008, T009, T027 |
+| Tool-schema / dispatcher / representation disagreement | T026 |
+| Retry / resume / idempotency | T027 |
+| Sensitive context / secret extraction | T028, částečně T005/T006 |
+| Privileged CI / workflow capability | T011, T012, T013 |
+| Supply chain | T014A–T014D |
+| Audit/evidence integrity | T018A–T018D, T025 |
+
+**Referenční integrita:** ID T026–T028 se nepřejmenovávají podle terminologie externí metodiky. V tomto projektu již mají stabilní význam:
+- `T026` Canonicalization / interpretation mismatch,
+- `T027` Duplicate / replayed Action Request,
+- `T028` Secret disclosure into untrusted context.
+
+Externí termíny se proto mapují na naše existující stabilní threat IDs místo vytváření kolidujících identifikátorů.
+
+---
+
+## 34. Pořadí práce po review v0
+
+```text
+THREAT-MODEL v0
+↓
+REF001 Cloudflare security-audit — referenční metodika
+↓
+Cloudflare-style RECONNAISSANCE
+↓
+NAŠE AUTORITATIVNÍ GITHUB INVENTURA
+↓
+coverage ledger inventury
+↓
+THREAT-MODEL v1
+↓
+CONTROLS / POLICY / PROTOCOLS
+↓
+implementace step-by-step
+↓
+developer tests
+↓
+independent/full security audit
+↓
+UX / acceptance tests
+↓
+RELEASE GATE
+```
+
+External audit ani reconnaissance nenahrazuje žádnou autoritativní inventuru, control ani release decision.
